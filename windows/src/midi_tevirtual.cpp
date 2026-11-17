@@ -117,7 +117,15 @@ bool open(const std::string& name, Receiver onReceive, std::string* error) {
 void send(const uint8_t* bytes, size_t n) {
     std::lock_guard<std::mutex> lock(sendMutex);
     if (!port || n == 0) return;
-    sendData(port, const_cast<LPBYTE>(bytes), static_cast<DWORD>(n));
+    if (!sendData(port, const_cast<LPBYTE>(bytes), static_cast<DWORD>(n))) {
+        // Say it once: if the port stops taking messages, every control would repeat it.
+        static bool complained = false;
+        if (!complained) {
+            complained = true;
+            jam::log("teVirtualMIDI refused a message (error " + std::to_string(GetLastError()) +
+                     "). Nothing will reach your app until the port is remade.");
+        }
+    }
 }
 
 void close() {
