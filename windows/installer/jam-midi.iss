@@ -7,7 +7,8 @@
 ; windows\README.md.
 
 #define AppName "Maschine Jam MIDI"
-#define AppVersion "0.1.0"
+; Keep this in step with the repository's tags: one version across both platforms.
+#define AppVersion "1.2.0"
 #define AppPublisher "Tijn"
 #define AppURL "https://github.com/tijnisfijn/maschine-jam-midi"
 #define AppExe "jam-midi.exe"
