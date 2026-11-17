@@ -20,6 +20,10 @@ Normally the Maschine Jam only works as a MIDI controller while NI's Controller 
 | `Sources/main.swift` | the driver |
 | `Tools/` | test tools: send MIDI, test the strip colours |
 
+## Download
+
+Ready-built for macOS 11 or newer (Apple Silicon and Intel) under [Releases](https://github.com/tijnisfijn/maschine-jam-midi/releases/latest). The binaries are not notarised, so after unzipping run `xattr -dr com.apple.quarantine` on the folder once. The release notes give the exact steps.
+
 ## Build and run
 
 It runs on macOS and needs only Apple's command line tools (`xcode-select --install`). There are no other dependencies.
