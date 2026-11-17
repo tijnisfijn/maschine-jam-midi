@@ -53,9 +53,9 @@ Run the app *or* the command line tool, not both: each makes its own **Maschine 
 
 ## Install on Windows
 
-Windows 10/11, as a command line tool. Download `Maschine Jam MIDI Setup.exe` from
-[Releases](https://github.com/tijnisfijn/maschine-jam-midi/releases/latest), or build it yourself
-with `windows\installer\build-installer.ps1`.
+Windows 10/11, as a command line tool. Download `maschine-jam-midi-<version>-windows-setup.exe`
+from [Releases](https://github.com/tijnisfijn/maschine-jam-midi/releases/latest), or build it
+yourself with `windows\installer\build-installer.ps1`.
 
 **It is not signed.** There is no code-signing certificate behind this project, so SmartScreen
 shows *"Windows protected your PC"* the first time. Click **More info**, then **Run anyway** — or

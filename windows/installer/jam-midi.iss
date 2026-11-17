@@ -29,7 +29,8 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\build\installer
-OutputBaseFilename=Maschine Jam MIDI Setup {#AppVersion}
+; No spaces: GitHub turns them into dots on a release asset, and this matches the macOS zip.
+OutputBaseFilename=maschine-jam-midi-{#AppVersion}-windows-setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
