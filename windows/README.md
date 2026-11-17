@@ -39,7 +39,7 @@ cmake --build windows/build
 Two ways, both per-user and neither needing admin rights. They put the same files in the same
 place, `%LOCALAPPDATA%\Programs\Maschine Jam MIDI`.
 
-**An installer** — build `Maschine Jam MIDI Setup <version>.exe` with
+**An installer** — build `maschine-jam-midi-<version>-windows-setup.exe` with
 [Inno Setup 6](https://jrsoftware.org/isinfo.php):
 
 ```powershell
