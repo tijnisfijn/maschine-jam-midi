@@ -1,10 +1,24 @@
 # Maschine Jam MIDI
 
-The Native Instruments Maschine Jam as an ordinary MIDI device, without Controller Editor. `jam-midi` talks to the Jam over USB HID itself. It sends MIDI out of a port called **Maschine Jam MIDI** and sets every LED from MIDI it receives on that same port: pad colours, scene and group colours, key brightness, touch strip LEDs and the level meter.
+**Use the Native Instruments Maschine Jam as an ordinary MIDI controller, without Controller Editor and with full control of every LED colour.**
 
-- No hardware pages. Every control sends one fixed message, and every LED has one fixed address.
-- Shift and Select send MIDI too. NI's MIDI mode keeps both for itself.
-- The numbers follow page 1 / page A of NI's default template, so a mapping made for that template still works. The exceptions are listed in [MIDI-MAP.md](MIDI-MAP.md).
+Normally the Maschine Jam only works as a MIDI controller while NI's Controller Editor runs. Even then it has hardware pages, Shift and Select send nothing, and you can't freely set the colours. `jam-midi` is a small open-source driver that talks to the Jam over USB itself. It turns the Jam into a plain MIDI device called **Maschine Jam MIDI** that any app can use: Resolume, Ableton Live, Bitwig, TouchDesigner, a DAW, or your own code.
+
+- **Every control sends MIDI:** 64 pads, scene and group keys, every other key including Shift and Select, the encoder (absolute and relative, plus push and touch), and all 8 touch strips (position and touch).
+- **Every LED listens to MIDI:** pad, scene and group colours (68 colours), key brightness, the touch strip LEDs (as a bar or one by one), and the level meter.
+- **No hardware pages:** every control sends one fixed message, and every LED has one fixed address.
+- **Compatible:** the numbers follow page 1 / page A of NI's default template, so a mapping made for that template mostly still works. The few exceptions are listed in [MIDI-MAP.md](MIDI-MAP.md).
+- **Small:** one Swift file with no dependencies. It picks the Jam up again after a replug.
+
+**Platform:** macOS. A Windows version is planned, see [WINDOWS.md](WINDOWS.md).
+
+| File | What |
+|---|---|
+| [MIDI-MAP.md](MIDI-MAP.md) | every MIDI message in and out, and the colour palette |
+| [PROTOCOL.md](PROTOCOL.md) | the Jam's USB HID protocol, as checked on a real Jam |
+| [WINDOWS.md](WINDOWS.md) | handover for building the Windows version |
+| `Sources/main.swift` | the driver |
+| `Tools/` | test tools: send MIDI, test the strip colours |
 
 ## Build and run
 
@@ -29,7 +43,7 @@ swiftc -O Tools/send.swift -o build/jam-send && swiftc -O Tools/strip-test.swift
 | `--raw` | print the raw HID reports |
 | `--name NAME` | name of the MIDI ports |
 
-Start it before the app that uses the Jam. It waits for the Jam and picks it up again after a replug. Ctrl-C turns the LEDs off and quits.
+Start it before the app that uses the Jam, then pick **Maschine Jam MIDI** as both the MIDI input and output in that app. It waits for the Jam and picks it up again after a replug. Ctrl-C turns the LEDs off and quits.
 
 Two tools help with testing:
 - `build/jam-send "Maschine Jam MIDI" B0 4C 7F` sends raw MIDI to the driver.
@@ -38,6 +52,10 @@ Two tools help with testing:
 ## NI's software
 
 Controller Editor does not need to run. NI's `NIHardwareAgent` can keep running: macOS lets both open the Jam, and the agent does not overwrite the LEDs. The driver writes the LEDs again every 2 seconds anyway. NI's own `Maschine Jam - 1` ports stay as well. Use **Maschine Jam MIDI** instead.
+
+## Made with AI
+
+This driver was built by Tijn together with Claude (Anthropic's AI) in Claude Code. Claude wrote the code and the docs. Every control, LED and colour was checked by hand on a real Maschine Jam. Issues and pull requests are welcome.
 
 ## Credits and licence
 
