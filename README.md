@@ -59,6 +59,6 @@ This driver was built by Tijn together with Claude (Anthropic's AI) in Claude Co
 
 ## Credits and licence
 
-MIT licence, see [LICENSE](LICENSE). The HID layout (which bit is which key, the LED reports and the colour palette) comes from [cabl](https://github.com/shaduzlabs/cabl), Copyright (C) 2015 Vincenzo Pacella, MIT licence. It was checked against a real Jam on 17 November 2026.
+MIT licence, see [LICENSE](LICENSE) and [NOTICE](NOTICE). The HID layout (which bit is which key, the LED reports and the colour palette) comes from [cabl](https://github.com/shaduzlabs/cabl), Copyright (C) 2015 Vincenzo Pacella, MIT licence. It was checked against a real Jam on 17 November 2026.
 
 This is an independent project. It is not made by, endorsed by or connected to Native Instruments. Maschine and Maschine Jam are trademarks of Native Instruments GmbH.

@@ -19,11 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-The USB HID layout and colour palette are based on cabl
-(https://github.com/shaduzlabs/cabl):
-
-Copyright (C) 2015 Vincenzo Pacella
-Distributed under the MIT License (http://opensource.org/licenses/MIT).
