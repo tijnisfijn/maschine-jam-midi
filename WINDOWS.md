@@ -6,7 +6,7 @@ The goal: the same driver on Windows. You plug in the Jam, a MIDI port called **
 
 - **The USB protocol is known and checked on hardware:** [PROTOCOL.md](PROTOCOL.md). It is plain HID, with three input reports and three LED output reports, and no setup message.
 - **The MIDI behaviour is fixed:** [MIDI-MAP.md](MIDI-MAP.md). The Windows version must send and accept exactly the same messages, so mappings work on both systems.
-- **The reference code is `Sources/main.swift`** (about 400 lines). The parts that don't depend on the platform are easy to find and port one to one:
+- **The reference code is `Sources/Driver/Driver.swift`** (about 400 lines; `Sources/App` is the macOS menu bar app around it). The parts that don't depend on the platform are easy to find and port one to one:
   - **Tables:** `keys`, `ctlForBit`, `keyForCC`, `defaultStripColour`.
   - **Pad numbering:** `noteForPad` / `padForNote`, hardware order top-left to MIDI order bottom-left.
   - **Colours:** `colour` (clamped to 0–71) and `pressedColour` (a held pad gets one step brighter, or white 70).
@@ -84,6 +84,6 @@ The macOS `Tools/send.swift` and `Tools/strip-test.swift` are worth porting too:
 
 Clone this repository, open it in Claude Code, and start with something like:
 
-> Read WINDOWS.md, PROTOCOL.md, MIDI-MAP.md and Sources/main.swift. Build the Windows version as described in WINDOWS.md, in a `windows/` folder, starting with option A (loopMIDI). First check in Device Manager how Windows sees the Jam.
+> Read WINDOWS.md, PROTOCOL.md, MIDI-MAP.md and Sources/Driver/Driver.swift. Build the Windows version as described in WINDOWS.md, in a `windows/` folder, starting with option A (loopMIDI). First check in Device Manager how Windows sees the Jam.
 
 Keep the macOS files as they are and add the Windows code next to them (`windows/`). Update the README's platform line when it works.

@@ -10,7 +10,7 @@ Normally the Maschine Jam only works as a MIDI controller while NI's Controller 
 - **Every LED listens to MIDI:** pad, scene and group colours (68 colours), key brightness, the touch strip LEDs (as a bar or one by one), and the level meter.
 - **No hardware pages:** every control sends one fixed message, and every LED has one fixed address.
 - **Compatible:** the numbers follow page 1 / page A of NI's default template, so a mapping made for that template mostly still works. The few exceptions are listed in [MIDI-MAP.md](MIDI-MAP.md).
-- **Small:** one Swift file with no dependencies. It picks the Jam up again after a replug.
+- **Easy to install:** a menu bar app that starts at login, or a command line tool. No dependencies, and it picks the Jam up again after a replug.
 
 **Platform:** macOS. A Windows version is planned, see [WINDOWS.md](WINDOWS.md).
 
@@ -19,24 +19,46 @@ Normally the Maschine Jam only works as a MIDI controller while NI's Controller 
 | [MIDI-MAP.md](MIDI-MAP.md) | every MIDI message in and out, and the colour palette |
 | [PROTOCOL.md](PROTOCOL.md) | the Jam's USB HID protocol, as checked on a real Jam |
 | [WINDOWS.md](WINDOWS.md) | handover for building the Windows version |
-| `Sources/main.swift` | the driver |
+| `Sources/Driver/` | the driver, shared by the app and the command line tool |
+| `Sources/App/` | the menu bar app |
+| `Sources/CLI/` | the command line tool `jam-midi` |
 | `Tools/` | test tools: send MIDI, test the strip colours |
+| `scripts/` | build, install, make the DMG, draw the icon |
 
-## Download
+## Install the app
 
-Ready-built for macOS 11 or newer (Apple Silicon and Intel) under [Releases](https://github.com/tijnisfijn/maschine-jam-midi/releases/latest). The binaries are not notarised, so after unzipping run `xattr -dr com.apple.quarantine` on the folder once. The release notes give the exact steps.
+The easy way is **Maschine Jam MIDI.app**, a small menu bar app (macOS 13 or newer, Apple Silicon and Intel).
 
-## Build and run
+1. Download the `.dmg` from [Releases](https://github.com/tijnisfijn/maschine-jam-midi/releases/latest), open it, and drag **Maschine Jam MIDI** to Applications.
+2. The app is not notarised, so macOS blocks it the first time. Unblock it once:
+   ```bash
+   xattr -dr com.apple.quarantine "/Applications/Maschine Jam MIDI.app"
+   ```
+   Or open it, then go to System Settings → Privacy & Security and click **Open Anyway**.
+3. Open it. A grid icon appears in the menu bar. It's filled in while the Jam is connected.
+4. In your app (Resolume, Ableton, ...), choose **Maschine Jam MIDI** as the MIDI input and output.
 
-It runs on macOS and needs only Apple's command line tools (`xcode-select --install`). There are no other dependencies.
+The menu shows whether the Jam is connected and the MIDI port. It also has:
+- **Colour Test:** shows a rainbow on every LED. Choose it again to switch back.
+- **Start at Login:** on after the first start, so the Jam just works after a restart. Click it to switch it off.
+- **MIDI Map:** opens the map.
+- **Quit:** turns the LEDs off and quits.
+
+Run the app *or* the command line tool, not both: each makes its own **Maschine Jam MIDI** port.
+
+## Build it yourself
+
+You need only Apple's command line tools (`xcode-select --install`). There are no other dependencies.
 
 ```bash
-mkdir -p build && swiftc -O -swift-version 5 Sources/main.swift -o build/jam-midi
+scripts/install.sh
 ```
 
-```bash
-swiftc -O Tools/send.swift -o build/jam-send && swiftc -O Tools/strip-test.swift -o build/strip-test
-```
+This builds the app and installs it in /Applications. `scripts/build.sh` only builds, into `build/`. `scripts/make-dmg.sh` also makes the DMG.
+
+## The command line tool
+
+`scripts/build.sh` also builds `build/jam-midi`, the same driver without the app. It's useful for testing and scripts, and runs on macOS 11 or newer. A ready-built zip is under Releases too.
 
 ```bash
 ./build/jam-midi
@@ -45,11 +67,11 @@ swiftc -O Tools/send.swift -o build/jam-send && swiftc -O Tools/strip-test.swift
 | Option | What |
 |---|---|
 | `-v` | print every control and every MIDI message |
-| `--demo` | light everything with the palette (a quick check) |
+| `--demo` | the colour test |
 | `--raw` | print the raw HID reports |
 | `--name NAME` | name of the MIDI ports |
 
-Start it before the app that uses the Jam, then pick **Maschine Jam MIDI** as both the MIDI input and output in that app. It waits for the Jam and picks it up again after a replug. Ctrl-C turns the LEDs off and quits.
+It waits for the Jam and picks it up again after a replug. Ctrl-C turns the LEDs off and quits.
 
 Two tools help with testing:
 - `build/jam-send "Maschine Jam MIDI" B0 4C 7F` sends raw MIDI to the driver.

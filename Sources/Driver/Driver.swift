@@ -2,6 +2,9 @@
 // ordinary MIDI device, without Controller Editor. It reads the Jam over USB HID, sends MIDI out of a
 // virtual source, and sets every LED from MIDI received on a virtual destination.
 //
+// This file is the driver itself, shared by the command line tool (Sources/CLI) and the menu bar
+// app (Sources/App). Everything runs on the main run loop.
+//
 // The HID layout (report 0x01 buttons, 0x02 strips, LED reports 0x80 / 0x81 / 0x82, the colour
 // palette) follows the MIT-licensed cabl library: Copyright (C) 2015 Vincenzo Pacella,
 // https://github.com/shaduzlabs/cabl, MIT licence (http://opensource.org/licenses/MIT).
@@ -11,28 +14,13 @@ import CoreMIDI
 import Foundation
 import IOKit.hid
 
-setvbuf(stdout, nil, _IOLBF, 0)
+// MARK: - Options (set by the CLI or the app before start())
 
-// MARK: - Options
-
-let args = CommandLine.arguments
-var verbose = args.contains("-v") || args.contains("--verbose")
-let portName = { () -> String in
-    if let i = args.firstIndex(of: "--name"), i + 1 < args.count { return args[i + 1] }
-    return "Maschine Jam MIDI"
-}()
-if args.contains("-h") || args.contains("--help") {
-    print("""
-    jam-midi: the Maschine Jam as an ordinary MIDI device (no Controller Editor)
-      -v, --verbose      print every control and every message
-      --name NAME        name of the MIDI ports (default "Maschine Jam MIDI")
-      --demo             light every pad, scene, group and strip with the palette, then run
-      --raw              print raw HID input reports (for working out the protocol)
-    """)
-    exit(0)
-}
-let rawMode = args.contains("--raw")
-let demoMode = args.contains("--demo")
+var verbose = false
+var rawMode = false
+/// Called on the main thread when the Jam is connected (true) or disconnected (false).
+var onConnectionChange: ((Bool) -> Void)?
+private(set) var jamConnected = false
 
 func log(_ s: String) {
     let t = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
@@ -52,7 +40,7 @@ enum Ctl {
 /// Non-grid keys: cabl bit, MIDI CC, LED byte in report 0x80 (nil: no LED), name.
 struct Key { let bit: Int; let cc: UInt8; let led: Int?; let name: String }
 let keys: [Key] = [
-    Key(bit: 0, cc: 16, led: 0, name: "Arrange"),
+    Key(bit: 0, cc: 16, led: 0, name: "Song (Arrange)"),
     Key(bit: 9, cc: 17, led: 1, name: "Step"),
     Key(bit: 10, cc: 18, led: 2, name: "Pad Mode"),
     Key(bit: 11, cc: 19, led: 3, name: "Clear"),
@@ -69,15 +57,15 @@ let keys: [Key] = [
     Key(bit: 99, cc: 30, led: 21, name: "Auto"),
     Key(bit: 94, cc: 31, led: 16, name: "Browse"),
     Key(bit: 100, cc: 32, led: 22, name: "Perform"),
-    Key(bit: 101, cc: 33, led: 23, name: "Variation"),
+    Key(bit: 101, cc: 33, led: 23, name: "Notes (Variation)"),
     Key(bit: 102, cc: 34, led: 24, name: "Lock"),
     Key(bit: 103, cc: 35, led: 25, name: "Tune"),
     Key(bit: 104, cc: 36, led: 26, name: "Swing"),
     Key(bit: 114, cc: 37, led: 36, name: "Select"),
     Key(bit: 90, cc: 38, led: 10, name: "Mst"),
     Key(bit: 91, cc: 39, led: 11, name: "Grp"),
-    Key(bit: 92, cc: 40, led: 12, name: "In"),
-    Key(bit: 93, cc: 41, led: 14, name: "Cue"),
+    Key(bit: 92, cc: 40, led: 12, name: "In 1"),
+    Key(bit: 93, cc: 41, led: 14, name: "Headphones (Cue)"),
     Key(bit: 105, cc: 46, led: 27, name: "Shift"),
     Key(bit: 110, cc: 47, led: 32, name: "Tempo"),
     Key(bit: 108, cc: 66, led: 30, name: "Transport Left"),
@@ -91,12 +79,15 @@ let keys: [Key] = [
 let ccEncoder: UInt8 = 42, ccEncoderRel: UInt8 = 43, ccEncoderPush: UInt8 = 44, ccEncoderTouch: UInt8 = 45
 let ccStrip: UInt8 = 48, ccStripTouch: UInt8 = 56, ccLevelL: UInt8 = 76, ccLevelR: UInt8 = 77
 
-var ctlForBit = [Int: Ctl]()
-for p in 0..<64 { ctlForBit[18 + p] = .pad(p) }
-for i in 0..<8 { ctlForBit[1 + i] = .scene(i); ctlForBit[82 + i] = .group(i) }
-for (i, k) in keys.enumerated() { ctlForBit[k.bit] = .key(i) }
-ctlForBit[115] = .encoderTouch
-ctlForBit[116] = .encoderPush
+let ctlForBit: [Int: Ctl] = {
+    var m = [Int: Ctl]()
+    for p in 0..<64 { m[18 + p] = .pad(p) }
+    for i in 0..<8 { m[1 + i] = .scene(i); m[82 + i] = .group(i) }
+    for (i, k) in keys.enumerated() { m[k.bit] = .key(i) }
+    m[115] = .encoderTouch
+    m[116] = .encoderPush
+    return m
+}()
 let keyForCC = Dictionary(uniqueKeysWithValues: keys.enumerated().map { ($0.element.cc, $0.offset) })
 
 /// Hardware pad (cabl order, 0 = top-left) to MIDI note (NI order, 0 = bottom-left).
@@ -125,16 +116,25 @@ var hostPad = [UInt8](repeating: 0, count: 80)          // the colour the host s
 var hostStripValue = [Int](repeating: -1, count: 8)     // last bar value, -1: none
 var stripColour = [UInt8](repeating: 0, count: 8)       // 0: use the default
 var hostStripLed = [UInt8](repeating: 0, count: 88)     // individual LEDs (channel 2), win over the bar
+var hostLevel = [UInt8](repeating: 0, count: 16)        // level meter segments (0x80 bytes 37..52)
 var pressed = Set<Int>()                                // cabl bits held down
 var dirty = (buttons: true, pads: true, strips: true)
+
+/// The colour test: while on, every LED shows a test pattern instead of what the host set.
+var colourTest = false { didSet { render(); flushLeds(force: true) } }
 
 let defaultStripColour: [UInt8] = [6, 14, 18, 30, 38, 46, 54, 58]
 
 func render() {
     for (i, k) in keys.enumerated() {
         guard let led = k.led else { continue }
-        let v = pressed.contains(k.bit) ? UInt8(127) : hostKey[i]
+        let host = colourTest ? 32 : hostKey[i]
+        let v = pressed.contains(k.bit) ? UInt8(127) : host
         if ledButtons[led] != v { ledButtons[led] = v; dirty.buttons = true }
+    }
+    for j in 0..<16 {
+        let v = colourTest ? UInt8(j % 8 < 5 ? 127 : 0) : hostLevel[j]
+        if ledButtons[37 + j] != v { ledButtons[37 + j] = v; dirty.buttons = true }
     }
     for i in 0..<80 {
         let bit: Int
@@ -143,15 +143,18 @@ func render() {
         case 8..<72: bit = 18 + (i - 8)
         default: bit = 82 + (i - 72)
         }
-        let v = pressed.contains(bit) ? pressedColour(hostPad[i]) : hostPad[i]
+        let host = colourTest ? UInt8(4 + (i % 64)) : hostPad[i]
+        let v = pressed.contains(bit) ? pressedColour(host) : host
         if ledPads[i] != v { ledPads[i] = v; dirty.pads = true }
     }
     for s in 0..<8 {
         let c = stripColour[s] == 0 ? defaultStripColour[s] : stripColour[s]
-        let lit = hostStripValue[s] < 0 ? 0 : (hostStripValue[s] * 11 + 63) / 127
+        let value = colourTest ? 127 : hostStripValue[s]
+        let lit = value < 0 ? 0 : (value * 11 + 63) / 127
         for j in 0..<11 {
             let idx = s * 11 + j
-            let v = hostStripLed[idx] != 0 ? hostStripLed[idx] : (j < lit ? c : 0)
+            let single = colourTest ? 0 : hostStripLed[idx]
+            let v = single != 0 ? single : (j < lit ? (colourTest ? defaultStripColour[s] : c) : 0)
             if ledStrips[idx] != v { ledStrips[idx] = v; dirty.strips = true }
         }
     }
@@ -159,7 +162,7 @@ func render() {
 
 // MARK: - MIDI
 
-var client = MIDIClientRef(), source = MIDIEndpointRef(), dest = MIDIEndpointRef()
+private var client = MIDIClientRef(), source = MIDIEndpointRef(), dest = MIDIEndpointRef()
 
 func send(_ bytes: [UInt8]) {
     var list = MIDIPacketList()
@@ -184,9 +187,8 @@ func handleMIDI(_ b: [UInt8]) {
                 case 8...15: hostPad[72 + n - 8] = colour(Int(v))
                 case ccStrip...(ccStrip + 7): hostStripValue[n - Int(ccStrip)] = Int(v)
                 case ccLevelL, ccLevelR:
-                    let base = UInt8(n) == ccLevelL ? 37 : 45, lit = (Int(v) * 8 + 63) / 127
-                    for j in 0..<8 { ledButtons[base + j] = j < lit ? 127 : 0 }
-                    dirty.buttons = true
+                    let base = UInt8(n) == ccLevelL ? 0 : 8, lit = (Int(v) * 8 + 63) / 127
+                    for j in 0..<8 { hostLevel[base + j] = j < lit ? 127 : 0 }
                 case ccEncoder: encoderAbs = Int(v)
                 default: if let k = keyForCC[UInt8(n)] { hostKey[k] = v }
                 }
@@ -201,7 +203,7 @@ func handleMIDI(_ b: [UInt8]) {
     }
 }
 
-func setUpMIDI() {
+private func setUpMIDI(_ portName: String) {
     MIDIClientCreateWithBlock(portName as CFString, &client) { note in
         if note.pointee.messageID == .msgSetupChanged, verbose { log("MIDI setup changed") }
     }
@@ -229,13 +231,14 @@ func setUpMIDI() {
 
 // MARK: - HID
 
-var device: IOHIDDevice?
-let inBuf = UnsafeMutablePointer<UInt8>.allocate(capacity: 256)
-var lastButtons = [UInt8](repeating: 0, count: 15)
-var lastEncoder = -1, encoderAbs = 64
-var stripTouched = [Bool](repeating: false, count: 8), stripLast = [Int](repeating: -1, count: 8)
+private var device: IOHIDDevice?
+private let inBuf = UnsafeMutablePointer<UInt8>.allocate(capacity: 256)
+private var lastButtons = [UInt8](repeating: 0, count: 15)
+private var lastEncoder = -1
+var encoderAbs = 64
+private var stripTouched = [Bool](repeating: false, count: 8), stripLast = [Int](repeating: -1, count: 8)
 
-func setReport(_ id: UInt8, _ data: [UInt8]) {
+private func setReport(_ id: UInt8, _ data: [UInt8]) {
     guard let d = device else { return }
     let r = IOHIDDeviceSetReport(d, kIOHIDReportTypeOutput, CFIndex(id), [id] + data, data.count + 1)
     if r != kIOReturnSuccess, verbose { log(String(format: "LED write %02X failed: %08X", id, r)) }
@@ -246,7 +249,7 @@ func flushLeds(force: Bool = false) {
     if dirty.strips || force { setReport(0x82, ledStrips); dirty.strips = false }
 }
 
-func controlChanged(bit: Int, down: Bool) {
+private func controlChanged(bit: Int, down: Bool) {
     if down { pressed.insert(bit) } else { pressed.remove(bit) }
     let v: UInt8 = down ? 127 : 0
     guard let c = ctlForBit[bit] else {
@@ -273,7 +276,7 @@ func describe(_ c: Ctl) -> String {
     }
 }
 
-func handleReport(_ r: [UInt8]) {
+private func handleReport(_ r: [UInt8]) {
     guard let id = r.first else { return }
     if rawMode { log(r.map { String(format: "%02x", $0) }.joined(separator: " ")) }
     if id == 0x01, r.count >= 17 {
@@ -317,40 +320,42 @@ func handleReport(_ r: [UInt8]) {
     }
 }
 
-func attach(_ d: IOHIDDevice) {
+private func attach(_ d: IOHIDDevice) {
     device = d
     lastButtons = [UInt8](repeating: 0, count: 15); lastEncoder = -1; pressed.removeAll()
-    IOHIDDeviceRegisterInputReportCallback(d, inBuf, 256, { _, _, _, _, id, rep, len in
+    IOHIDDeviceRegisterInputReportCallback(d, inBuf, 256, { _, _, _, _, _, rep, len in
         handleReport(Array(UnsafeBufferPointer(start: rep, count: len)))
     }, nil)
     render(); flushLeds(force: true)
+    jamConnected = true
     log("Maschine Jam connected")
+    onConnectionChange?(true)
 }
 
-let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
-IOHIDManagerSetDeviceMatching(manager, [kIOHIDVendorIDKey: 0x17CC, kIOHIDProductIDKey: 0x1500] as CFDictionary)
-IOHIDManagerRegisterDeviceMatchingCallback(manager, { _, _, _, d in attach(d) }, nil)
-IOHIDManagerRegisterDeviceRemovalCallback(manager, { _, _, _, _ in
-    device = nil; log("Maschine Jam disconnected, waiting for it")
-}, nil)
-IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+private let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
 
-setUpMIDI()
-if demoMode {
-    for i in 0..<80 { hostPad[i] = UInt8(4 + (i % 64)) }
-    for s in 0..<8 { hostStripValue[s] = 127 }
-    for k in 0..<keys.count { hostKey[k] = 32 }
+/// Creates the MIDI ports and starts watching for the Jam. Call once, on the main thread.
+func startDriver(portName: String = "Maschine Jam MIDI") {
+    setUpMIDI(portName)
+    IOHIDManagerSetDeviceMatching(manager, [kIOHIDVendorIDKey: 0x17CC, kIOHIDProductIDKey: 0x1500] as CFDictionary)
+    IOHIDManagerRegisterDeviceMatchingCallback(manager, { _, _, _, d in attach(d) }, nil)
+    IOHIDManagerRegisterDeviceRemovalCallback(manager, { _, _, _, _ in
+        device = nil; jamConnected = false
+        log("Maschine Jam disconnected, waiting for it")
+        onConnectionChange?(false)
+    }, nil)
+    IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
+    let r = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+    if r != kIOReturnSuccess { log(String(format: "could not open USB HID: %08X", r)) }
+    log("waiting for the Maschine Jam")
+    // Refresh the LEDs now and then: NI's agent or a replug can overwrite them.
+    Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in flushLeds(force: true) }
 }
-let r = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
-if r != kIOReturnSuccess { log(String(format: "could not open USB HID: %08X", r)) }
-log("waiting for the Maschine Jam (Ctrl-C to quit)")
 
-// Refresh the LEDs now and then: NI's agent or a replug can overwrite them.
-Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in flushLeds(force: true) }
-signal(SIGINT) { _ in
+/// Turns every LED off (on quit).
+func ledsOff() {
     for i in ledButtons.indices { ledButtons[i] = 0 }
     for i in ledPads.indices { ledPads[i] = 0 }
     for i in ledStrips.indices { ledStrips[i] = 0 }
-    flushLeds(force: true); exit(0)
+    flushLeds(force: true)
 }
-CFRunLoopRun()
