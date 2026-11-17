@@ -1,0 +1,40 @@
+Maschine Jam MIDI turns the Native Instruments Maschine Jam into an ordinary MIDI device, without
+Controller Editor and with every LED colour under your control.
+
+Two things to know before you install.
+
+
+1. THIS BUILD IS NOT SIGNED
+
+There is no code-signing certificate behind it, so Windows does not recognise the publisher.
+SmartScreen will show "Windows protected your PC" the first time you run the installer. To get
+past it: click "More info", then "Run anyway". You can check what you are running first: the
+source is at https://github.com/tijnisfijn/maschine-jam-midi and builds from it with nothing but
+Visual Studio Build Tools.
+
+The installer asks for no administrator rights. It installs for the current user only, into
+%LOCALAPPDATA%\Programs\Maschine Jam MIDI, so there is no UAC prompt on top of the warning.
+
+
+2. NATIVE INSTRUMENTS' SERVICE HAS TO BE STOPPED
+
+If NI's software is installed, NIHardwareService fights the driver over the Jam's LEDs: press one
+of the left-hand mode keys and the other keys start flashing. The Jam itself still works, but the
+lights will not behave until the service is stopped.
+
+In PowerShell, as administrator:
+
+    Stop-Service -Name NIHardwareService -Force
+    Set-Service -Name NIHardwareService -StartupType Manual
+
+To put it back later:
+
+    Set-Service -Name NIHardwareService -StartupType Automatic
+    Start-Service -Name NIHardwareService
+
+Note that this affects every NI device, not just the Jam. Controller Editor does not need to run,
+and does not need to be installed.
+
+
+You also need a virtual MIDI port for other apps to open; the next screens say more, and
+README-windows.md in the install folder has the whole story.

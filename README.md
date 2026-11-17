@@ -12,13 +12,18 @@ Normally the Maschine Jam only works as a MIDI controller while NI's Controller 
 - **Compatible:** the numbers follow page 1 / page A of NI's default template, so a mapping made for that template mostly still works. The few exceptions are listed in [MIDI-MAP.md](MIDI-MAP.md).
 - **Easy to install:** a menu bar app that starts at login, or a command line tool. No dependencies, and it picks the Jam up again after a replug.
 
-**Platform:** macOS. A Windows version is planned, see [WINDOWS.md](WINDOWS.md).
+**Platform:** macOS, and Windows 10/11 as a command line tool — see
+[windows/README.md](windows/README.md). On Windows you have to stop NI's `NIHardwareService` and
+install [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html) for the MIDI port, both
+explained there. [WINDOWS.md](WINDOWS.md) is the original handover.
 
 | File | What |
 |---|---|
 | [MIDI-MAP.md](MIDI-MAP.md) | every MIDI message in and out, and the colour palette |
 | [PROTOCOL.md](PROTOCOL.md) | the Jam's USB HID protocol, as checked on a real Jam |
 | [WINDOWS.md](WINDOWS.md) | handover for building the Windows version |
+| [windows/README.md](windows/README.md) | the Windows build: how to build it, run it, and what differs |
+| `windows/` | the Windows driver: a C++17 port of the driver, HID through Win32, MIDI through WinMM |
 | `Sources/Driver/` | the driver, shared by the app and the command line tool |
 | `Sources/App/` | the menu bar app |
 | `Sources/CLI/` | the command line tool `jam-midi` |
@@ -46,7 +51,34 @@ The menu shows whether the Jam is connected and the MIDI port. It also has:
 
 Run the app *or* the command line tool, not both: each makes its own **Maschine Jam MIDI** port.
 
-## Build it yourself
+## Install on Windows
+
+Windows 10/11, as a command line tool. Download `Maschine Jam MIDI Setup.exe` from
+[Releases](https://github.com/tijnisfijn/maschine-jam-midi/releases/latest), or build it yourself
+with `windows\installer\build-installer.ps1`.
+
+**It is not signed.** There is no code-signing certificate behind this project, so SmartScreen
+shows *"Windows protected your PC"* the first time. Click **More info**, then **Run anyway** — or
+build it from source, which takes nothing but Visual Studio Build Tools. The installer is
+per-user, so it asks for no administrator rights.
+
+Two things Windows needs that macOS does not:
+
+1. **Stop NI's service**, or it fights the driver over the LEDs (as administrator):
+   ```powershell
+   Stop-Service -Name NIHardwareService -Force
+   Set-Service  -Name NIHardwareService -StartupType Manual
+   ```
+2. **Install [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html)**, because Windows
+   cannot make a MIDI port by itself. Make two ports in it called `Maschine Jam MIDI` and
+   `Maschine Jam MIDI Feedback` and the driver uses those, with no licence attached to anything.
+   Without them it falls back to making its own single port through loopMIDI's teVirtualMIDI SDK,
+   which is free for personal use but needs a licence for commercial use.
+
+[windows/README.md](windows/README.md) has the whole story, including what happens when Windows
+MIDI Services makes all of this unnecessary.
+
+## Build it yourself (macOS)
 
 You need only Apple's command line tools (`xcode-select --install`). There are no other dependencies.
 
