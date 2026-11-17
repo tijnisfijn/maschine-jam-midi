@@ -1,5 +1,7 @@
 # Maschine Jam MIDI
 
+![The Maschine Jam's touch strips lit in eight colours by jam-midi](assets/social-preview.png)
+
 **Use the Native Instruments Maschine Jam as an ordinary MIDI controller, without Controller Editor and with full control of every LED colour.**
 
 Normally the Maschine Jam only works as a MIDI controller while NI's Controller Editor runs. Even then it has hardware pages, Shift and Select send nothing, and you can't freely set the colours. `jam-midi` is a small open-source driver that talks to the Jam over USB itself. It turns the Jam into a plain MIDI device called **Maschine Jam MIDI** that any app can use: Resolume, Ableton Live, Bitwig, TouchDesigner, a DAW, or your own code.
