@@ -6,7 +6,8 @@ USB HID and turns it into a plain MIDI device, with exactly the messages in
 
 **State:** working, and checked on a real Jam on Windows 11 (25H2, build 26200). The controls read,
 every LED writes, the Jam is picked up again after a replug, and a MIDI port called **Maschine Jam
-MIDI** appears for other apps to open.
+MIDI** appears for other apps to open — with its messages arriving at the far end, checked from a
+separate process with `jam-listen`.
 
 Two things Windows needs that macOS does not:
 
@@ -93,6 +94,27 @@ windows\build\jam-midi.exe
 | `--no-refresh` | stop rewriting all the LEDs every 2 s, to track down flicker |
 
 It waits for the Jam and picks it up again after a replug. Ctrl-C turns the LEDs off and quits.
+
+## Test tools
+
+Three small programs, built next to the driver, for checking it without a DAW.
+
+```powershell
+# what the driver sends: run it, then press things on the Jam
+windows\build\jam-listen.exe "Maschine Jam MIDI" 0
+
+# what the driver receives: set the top-left pad dim red, and the level meter
+windows\build\jam-send.exe "Maschine Jam MIDI" 90 38 05
+windows\build\jam-send.exe "Maschine Jam MIDI" B0 4C 7F B0 4D 40
+
+# raw colours straight to the strip LEDs, bypassing the driver (stop it first)
+windows\build\strip-test.exe 1
+```
+
+`jam-listen` decodes with the driver's own tables, so it prints `B0 17 7F   Right down` rather
+than just the bytes, and a wrong name means a wrong map. Give it a number of seconds, or `0` to
+run until Ctrl-C. With loopMIDI ports rather than one virtual port, listen on `Maschine Jam MIDI`
+and send to `Maschine Jam MIDI Feedback`.
 
 ## The MIDI port
 
@@ -205,6 +227,29 @@ If you hit `ERROR_ACCESS_DENIED` or `ERROR_SHARING_VIOLATION` on some other mach
 names it in the log; quitting Controller Editor and stopping `NIHardwareService` is the first thing
 to try there too.
 
+## If the Jam runs its own light show
+
+After the PC sleeps and wakes, or the USB port suspends and resumes, the Jam can come back in a
+state of its own where it animates its LEDs — colours running over the pads the whole time, a
+sort of disco mode. While it is like that it **ignores what the driver writes**: the LED reports
+are accepted (`WriteFile` succeeds, no error in the log) but the device paints over them.
+
+**Unplug the USB cable, wait a few seconds, and plug it back in.** That is the only thing that
+clears it, because the Jam has to lose power. These do *not* work, all checked on hardware:
+
+- restarting the driver, or running it with `--demo`
+- disabling and re-enabling the device in Device Manager (it stays powered throughout)
+- starting `NIHardwareService`, or stopping it
+
+Nothing in the driver can fix this. The Jam takes no setup or wake-up message: cabl, which the
+protocol in [../PROTOCOL.md](../PROTOCOL.md) comes from, sends none either — its only writes are
+the three LED reports. If a wake-up command exists, it is not known, and the three LED reports are
+not it.
+
+You can tell this apart from the Native Instruments problem below by what it looks like. This is
+colours *moving* with nothing running; NI's service fighting the driver is keys *flashing* when
+you press one of the left-hand mode keys.
+
 ## How the code is laid out
 
 | File | What |
@@ -217,6 +262,7 @@ to try there too.
 | `src/midi_winmm.cpp` | option A: a pair of loopMIDI ports through WinMM |
 | `src/main.cpp` | the CLI and the event loop |
 | `tools/jam-send.cpp` | send raw MIDI to a port by name |
+| `tools/jam-listen.cpp` | print what a port sends, decoded back into the Jam's controls |
 | `tools/strip-test.cpp` | write raw colours straight to the strip LEDs |
 | `install.ps1`, `uninstall.ps1` | install for the current user without an installer |
 | `installer/` | the Inno Setup script and the script that builds the `.exe` |

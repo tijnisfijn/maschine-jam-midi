@@ -35,5 +35,9 @@ target_link_libraries(jam-midi PRIVATE jamcore)
 add_executable(jam-send tools/jam-send.cpp)
 target_link_libraries(jam-send PRIVATE winmm)
 
+# Decodes what it hears with the driver's own tables, so it links the core.
+add_executable(jam-listen tools/jam-listen.cpp)
+target_link_libraries(jam-listen PRIVATE jamcore)
+
 add_executable(strip-test tools/strip-test.cpp)
 target_link_libraries(strip-test PRIVATE jamcore)
